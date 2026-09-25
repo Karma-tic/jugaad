@@ -556,7 +556,11 @@
       border-radius: 8px;
     }
     .quest-banner {
-      align-self: center;
+      position: absolute;
+      bottom: 65px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
       background: rgba(30, 27, 75, 0.9);
       border: 2px solid #818cf8;
       border-radius: 30px;
@@ -600,6 +604,7 @@
       bottom: 20px;
       left: 50%;
       transform: translateX(-50%);
+      z-index: 11;
       background: rgba(0,0,0,0.85);
       color: #fef08a;
       border: 1px dashed #ca8a04;
@@ -849,7 +854,7 @@
     </div>
 
     <img src="/assets/jugaad_plane_transparent.png" class="hero-plane-logo" alt="Jugaad Plane Logo" />
-    <div class="landing-logo"> BHOPALI SAFAR</div>
+    <div class="landing-logo"> JUGAAD: Bas Pahunchna Hai</div>
     <div class="landing-sublogo">The Great Desi Jugaad Adventure</div>
 
     <div class="theme-quote-box">
@@ -997,7 +1002,7 @@
         <div></div>
         <button id="btn-left" class="btn-act" title="Move Left (A)">⬅️</button>
         <button id="btn-down" class="btn-act" title="Move Down (S)">⬇️</button>
-        <button id="btn-right" class="btn-act" title="Move Right (D)">️</button>
+        <button id="btn-right" class="btn-act" title="Move Right (D)">➡️</button>
       </div>
     </div>
 
@@ -1033,7 +1038,7 @@
           </div>
           <div class="stat-badge">
             <div class="stat-val">+1000</div>
-            <div class="stat-lbl">Bhopali Swag Score</div>
+            <div class="stat-lbl">Jugaad Score</div>
           </div>
         </div>
 
