@@ -36,7 +36,7 @@ class Game {
       0.1,
       1000
     );
-    this.camera.position.set(-4, 4.8, 9.5);
+    this.camera.position.set(-98 + 3.2, 4.8, 0.5 + 8.8);
     this.camera.lookAt(-2, 1.2, 0);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -60,7 +60,12 @@ class Game {
     // Street Environment
     this.env = AssetFactory.createStreetEnvironment();
     this.scene.add(this.env);
+    this.env.visible = false;
+    this.scooter.visible = false;
+    this.cow.visible = false;
+    this.trench.visible = false;
     this.house = AssetFactory.createHouseInterior();
+    this.house.position.set(-95, 0, 0);
     this.scene.add(this.house);
 
     // Vintage Scooter (with Seated Rider hidden initially)
@@ -72,7 +77,7 @@ class Game {
 
     // Standing Pixar Boy Character
     this.player = AssetFactory.createCartoonBoy();
-    this.player.position.set(-2.5, 0, 0.5);
+    this.player.position.set(-98, 0, 0.5);
     this.scene.add(this.player);
 
     // Road Excavation Trench at x = 11
@@ -92,36 +97,42 @@ class Game {
     const broom = AssetFactory.createBroom();
     broom.position.set(-2.5, 0, 1.8);
     this.scene.add(broom);
+    broom.visible = false;
     this.items.push(broom);
 
     const bottle = AssetFactory.createPlasticBottle();
     bottle.position.set(0.5, 0, -2.6);
     this.scene.add(bottle);
+    bottle.visible = false;
     this.items.push(bottle);
 
     const brick = AssetFactory.createBrick();
-    brick.position.set(-1.5, 0, 1.5);
+    brick.position.set(-97, 0, 1.5);
     this.scene.add(brick);
     this.items.push(brick);
 
     const cardboard = AssetFactory.createCardboard();
     cardboard.position.set(4.8, 0, 2.0);
     this.scene.add(cardboard);
+    cardboard.visible = false;
     this.items.push(cardboard);
 
     const plank = AssetFactory.createTimberPlank();
     plank.position.set(6.8, 0, -2.8);
     this.scene.add(plank);
+    plank.visible = false;
     this.items.push(plank);
 
     const tyre = AssetFactory.createOldTyre();
     tyre.position.set(15.5, 0, 1.8);
     this.scene.add(tyre);
+    tyre.visible = false;
     this.items.push(tyre);
 
     const grass = AssetFactory.createGrassRotiBasket();
     grass.position.set(18.0, 0, -3.2);
     this.scene.add(grass);
+    grass.visible = false;
     this.items.push(grass);
 
     // Solid Colliders
@@ -472,7 +483,7 @@ class Game {
       btnToggleSound.addEventListener('click', (e) => {
         e.stopPropagation();
         const isMuted = audio.toggleMute();
-        btnToggleSound.textContent = isMuted ? '🔇' : '🔊';
+        btnToggleSound.textContent = isMuted ? 'Sound Off' : 'Sound On';
         btnToggleSound.title = isMuted ? 'Unmute Sound' : 'Mute Sound';
       });
     }
@@ -484,7 +495,7 @@ class Game {
         audio.init();
         audio.playJugaadSuccess();
         this.addScore(150, 0);
-        alert("🎁 DESI JUGAAD HACK #1 (Bhopal Scooter Secret):\n\n'Agar scooter ki kick jam ho jaye ya subah thand me start na ho — gaadi ko 45° right tilt karke 3 second ruko, phir single kick maaro, 100% start!'\n\n🏆 Bonus: +150 Desi Swag Points Added!");
+        alert(" DESI JUGAAD HACK #1 (Bhopal Scooter Secret):\n\n'Agar scooter ki kick jam ho jaye ya subah thand me start na ho — gaadi ko 45° right tilt karke 3 second ruko, phir single kick maaro, 100% start!'\n\n Bonus: +150 Desi Swag Points Added!");
       });
     }
 
@@ -494,7 +505,7 @@ class Game {
         audio.init();
         audio.playJugaadSuccess();
         this.addScore(150, 0);
-        alert("🎁 DESI JUGAAD HACK #2 (Universal Desi Rule):\n\n'Gaadi ka fuse udd jaye toh mohalle ke paan wale se safety pin ya cigarette silver foil lo aur socket bypass karo! Desi jugaad zindabad!'\n\n🏆 Bonus: +150 Desi Swag Points Added!");
+        alert(" DESI JUGAAD HACK #2 (Universal Desi Rule):\n\n'Gaadi ka fuse udd jaye toh mohalle ke paan wale se safety pin ya cigarette silver foil lo aur socket bypass karo! Desi jugaad zindabad!'\n\n Bonus: +150 Desi Swag Points Added!");
       });
     }
 
@@ -669,22 +680,33 @@ class Game {
     if (this.inventory) {
       const carried = this.inventory;
 
-      // CRISIS 1: Near House Door (-4.5, 0, 0.5)
-      const distToDoor = pPos.distanceTo(new THREE.Vector3(-4.5, 0, 0.5));
-      if (this.stage === 0 && distToDoor < 2.5) {
+      // CRISIS 1: Near House Door in Trailer Level (x=-101)
+      const distToDoor = pPos.distanceTo(new THREE.Vector3(-101, 0, 0.5));
+      if (this.stage === 0 && distToDoor < 3.5) {
         if (carried.userData.type === 'brick') {
           this.player.remove(carried);
-          this.scene.add(carried);
-          carried.position.set(-4.3, 0, 1.2); // Wedge brick near door
+          // Don't add brick back, just destroy it
           
-          // Open door
+          // Open door animation
           if(this.house) {
             this.house.children.forEach(child => {
-               if(child.name === 'HouseDoor') child.rotation.y = -Math.PI / 2.5;
+               if(child.name === 'HouseDoor') child.rotation.y = Math.PI / 2.5;
             });
           }
-          this.scooter.rotation.x = 0; // Fix scooter stand implicitly
           
+          // TELEPORT to street level
+          setTimeout(() => {
+              this.house.visible = false;
+              this.items.forEach(item => item.visible = true);
+              this.env.visible = true;
+              this.scooter.visible = true;
+              this.cow.visible = true;
+              this.trench.visible = true;
+              this.player.position.set(-4, 0, 0.5);
+              this.camera.position.set(-4 + 3.2, 4.8, 0.5 + 8.8); // Snap camera
+              this.scooter.rotation.x = 0; // Fix scooter stand implicitly
+          }, 800);
+
           this.inventory = null;
           this.stage = 1;
           this.updateMeter(25);
@@ -694,7 +716,7 @@ class Game {
             'Mom',
             'Brick used as door stopper! You are out of the house. Now get on the scooter, but beware of the broken road!'
           );
-          this.questText.textContent = 'Door is propped open. Now take the scooter, but there is a trench ahead! Find a wooden plank!';
+          this.questText.textContent = 'Get on the scooter [E], but there is a trench ahead! Find a wooden plank!';
           return;
         } else {
           this.showDialogue('Mom', carried.userData.rejectMsg || 'Yeh darwaza nahi khol sakta!');
@@ -897,7 +919,7 @@ class Game {
           audio.playSplash();
           audio.playBrickThud();
           this.showDialogue('Mom', 'Arey Baap Re! 2 meter gehre gaddhe me gir gaye! Phatte ke upar se chalo!');
-          this.triggerJugaadToast('⚠️ SPLASH! GEHRE GADDHE ME GIR GAYE!');
+          this.triggerJugaadToast('️ SPLASH! GEHRE GADDHE ME GIR GAYE!');
           this.player.position.y = -2.0;
 
           setTimeout(() => {
@@ -1019,13 +1041,13 @@ class Game {
         this.burstConfetti(this.scooter.position);
         this.addScore(500, 1);
 
-        this.triggerJugaadToast('🏆 VICTORY: LEVEL 1 CLEARED! 🏆');
+        this.triggerJugaadToast(' VICTORY: LEVEL 1 CLEARED! ');
         this.showDialogue(
           'Mom',
           'Wah Miyaan! Bada Talab VIP Road pahunch gaye! Bhopal me koi mushkil nahi jo Jugaad se na suljhe!'
         );
         this.questText.textContent = '🌟 CONGRATULATIONS! You mastered the Bhopal Mohalla Jugaad!';
-        this.promptTip.innerHTML = 'Wah Miyaan! 100% Desi Swag Champion! 🏆';
+        this.promptTip.innerHTML = 'Wah Miyaan! 100% Desi Swag Champion! ';
 
         // Show Full Victory Modal
         if (this.victoryModal) {
@@ -1090,13 +1112,13 @@ class Game {
       });
 
       if (nearestItem) {
-        this.promptTip.innerHTML = `✨ Press <b>[E]</b> to Inspect / Pick up <b>${nearestItem.userData.title}</b>`;
+        this.promptTip.innerHTML = ` Press <b>[E]</b> to Inspect / Pick up <b>${nearestItem.userData.title}</b>`;
         return;
       }
 
       if (this.stage === 3) {
         if (pPos.distanceTo(this.scooter.position) < 2.8) {
-          this.promptTip.innerHTML = '✨ Press <b>[E]</b> to Kickstart & Mount Scooter!';
+          this.promptTip.innerHTML = ' Press <b>[E]</b> to Kickstart & Mount Scooter!';
           return;
         }
       }
@@ -1104,11 +1126,11 @@ class Game {
       this.promptTip.innerHTML = 'Explore the mohalla with <b>W, A, S, D</b> | Find the right Jugaad objects!';
     } else {
       if (this.stage === 0 && pPos.distanceTo(this.scooter.position) < 2.8) {
-        this.promptTip.innerHTML = `✨ Press <b>[E]</b> to test <b>${this.inventory.userData.title}</b> as Scooter Stand!`;
+        this.promptTip.innerHTML = ` Press <b>[E]</b> to test <b>${this.inventory.userData.title}</b> as Scooter Stand!`;
       } else if (this.stage === 1 && pPos.distanceTo(this.trench.position) < 3.4) {
-        this.promptTip.innerHTML = `✨ Press <b>[E]</b> to place <b>${this.inventory.userData.title}</b> across Trench!`;
+        this.promptTip.innerHTML = ` Press <b>[E]</b> to place <b>${this.inventory.userData.title}</b> across Trench!`;
       } else if (this.stage === 2 && pPos.distanceTo(this.cow.position) < 3.6) {
-        this.promptTip.innerHTML = `✨ Press <b>[E]</b> to offer <b>${this.inventory.userData.title}</b> to Gau Mata!`;
+        this.promptTip.innerHTML = ` Press <b>[E]</b> to offer <b>${this.inventory.userData.title}</b> to Gau Mata!`;
       } else {
         this.promptTip.innerHTML = `Carrying: <b>${this.inventory.userData.title}</b> | Press <b>[E]</b> anywhere to drop`;
       }
