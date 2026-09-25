@@ -835,7 +835,14 @@ class Game {
     const time = performance.now() * 0.002;
 
     // --- 1. WALKING PLAYER PHYSICS & COLLISION ---
-    if (!this.isRiding && this.stage < 4 && !this.isFalling) {
+    const landing = document.getElementById('landing-screen');
+      const intro = document.getElementById('intro-screen');
+      const map = document.getElementById('level-map-screen');
+      const isOverlayActive = (landing && landing.style.display !== 'none') || 
+                              (intro && intro.style.display !== 'none') || 
+                              (map && map.style.display === 'flex');
+
+      if (!this.isRiding && this.stage < 4 && !this.isFalling && !isOverlayActive) {
       let vx = 0;
       let vz = 0;
 
