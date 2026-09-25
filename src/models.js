@@ -64,7 +64,7 @@ class TextureGenerator {
   }
 }
 
-class AssetFactory {
+export class AssetFactory {
   // 1. Stylized Pixar/Cartoon Boy (Matching Image 1) - Standing / Walking
   static createCartoonBoy() {
     const character = new THREE.Group();
