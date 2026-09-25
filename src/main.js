@@ -72,7 +72,7 @@ class Game {
 
     // Standing Pixar Boy Character
     this.player = AssetFactory.createCartoonBoy();
-    this.player.position.set(-4, 0, 0.5);
+    this.player.position.set(-2.5, 0, 0.5);
     this.scene.add(this.player);
 
     // Road Excavation Trench at x = 11
@@ -100,7 +100,7 @@ class Game {
     this.items.push(bottle);
 
     const brick = AssetFactory.createBrick();
-    brick.position.set(-2.0, 0, 2.5);
+    brick.position.set(-1.5, 0, 1.5);
     this.scene.add(brick);
     this.items.push(brick);
 
@@ -218,8 +218,8 @@ class Game {
     this.victoryModal = document.getElementById('victory-modal');
 
     this.showDialogue(
-      'Chacha',
-      'Arre miyaan! Scooter ka stand toot gaya! Mohalle me kabaad dhundo aur Laal Eent jaisa koi thos stand banao!'
+      'Mom',
+      'Beta jaldi uth! Aaj function hai. 10 baje tak pahunchna hai! Par room ka darwaza jam ho gaya hai, koi jugaad lagao darwaza kholne ka!'
     );
   }
 
@@ -227,7 +227,7 @@ class Game {
     if ('speechSynthesis' in window) {
       try { window.speechSynthesis.cancel(); } catch (e) {}
     }
-    this.dialogueSpeaker.textContent = `🗣️ ${speaker}`;
+    this.dialogueSpeaker.textContent = ` ${speaker}`;
     this.dialogueText.textContent = `"${text}"`;
     this.dialogueBox.style.display = 'block';
     clearTimeout(this.dialogueTimeout);
@@ -595,9 +595,9 @@ class Game {
       this.cow.userData.headGroup.rotation.x = -0.3;
     }
 
-    this.triggerJugaadToast('💥 ACCIDENT! GAU MATA SE TAKKAR! 💥');
+    this.triggerJugaadToast(' ACCIDENT! GAU MATA SE TAKKAR! ');
     this.showDialogue(
-      'Chacha',
+      'Mom',
       'ARRE BAAP RE! ACCIDENT HO GAYA! Gau Mata se takra gaye! Pehle sabzi market se roti & ghaas laake unhe side karna tha miyaan!'
     );
 
@@ -669,27 +669,35 @@ class Game {
     if (this.inventory) {
       const carried = this.inventory;
 
-      // CRISIS 1: Near Scooter (-6, 0, -0.5)
-      const distToScooter = pPos.distanceTo(this.scooter.position);
-      if (this.stage === 0 && distToScooter < 2.8) {
+      // CRISIS 1: Near House Door (-4.5, 0, 0.5)
+      const distToDoor = pPos.distanceTo(new THREE.Vector3(-4.5, 0, 0.5));
+      if (this.stage === 0 && distToDoor < 2.5) {
         if (carried.userData.type === 'brick') {
           this.player.remove(carried);
           this.scene.add(carried);
-          carried.position.set(-6.1, 0, -0.9);
-          this.scooter.rotation.x = 0; // Stands upright!
+          carried.position.set(-4.3, 0, 1.2); // Wedge brick near door
+          
+          // Open door
+          if(this.house) {
+            this.house.children.forEach(child => {
+               if(child.name === 'HouseDoor') child.rotation.y = -Math.PI / 2.5;
+            });
+          }
+          this.scooter.rotation.x = 0; // Fix scooter stand implicitly
+          
           this.inventory = null;
           this.stage = 1;
           this.updateMeter(25);
           audio.playBrickThud();
-          this.triggerJugaadToast('🎉 JUGAAD 1: LAAL EENT KA STAND! (+25%)');
+          this.triggerJugaadToast('JUGAAD 1: DOOR OPENED! (+25%)');
           this.showDialogue(
-            'Chacha',
-            'Hao miyaan! Laal eent ka stand lag gaya! Ab sadak par dekho, municipal walon ne gehra gaddha khoda hai!'
+            'Mom',
+            'Brick used as door stopper! You are out of the house. Now get on the scooter, but beware of the broken road!'
           );
-          this.questText.textContent = 'Aage sadak par gehra gaddha hai! Construction pile se lamba lakdi ka phatta dhundo!';
+          this.questText.textContent = 'Door is propped open. Now take the scooter, but there is a trench ahead! Find a wooden plank!';
           return;
         } else {
-          this.showDialogue('Chacha', carried.userData.rejectMsg || 'Yeh cheez scooter ka stand nahi ban sakti!');
+          this.showDialogue('Mom', carried.userData.rejectMsg || 'Yeh darwaza nahi khol sakta!');
           return;
         }
       }
@@ -711,15 +719,15 @@ class Game {
           this.stage = 2;
           this.updateMeter(50);
           audio.playPlankSnap();
-          this.triggerJugaadToast('🎉 JUGAAD 2: TIMBER BRIDGE READY! (+25%)');
+          this.triggerJugaadToast(' JUGAAD 2: TIMBER BRIDGE READY! (+25%)');
           this.showDialogue(
-            'Chacha',
+            'Mom',
             'Bhari lakdi ka phatta lag gaya! 3.6 meter ka chasm cover ho gaya! Aage dekho, Gau Mata raaste ke beech baithi hain!'
           );
           this.questText.textContent = 'Raste me Gau Mata baithi hain! Sabzi market se Taazi Ghaas & Roti le aao!';
           return;
         } else {
-          this.showDialogue('Chacha', carried.userData.rejectMsg || 'Isse bridge nahi banega!');
+          this.showDialogue('Mom', carried.userData.rejectMsg || 'Isse bridge nahi banega!');
           return;
         }
       }
@@ -738,15 +746,15 @@ class Game {
           this.cow.userData.isDistracted = true;
           this.cow.userData.state = 'moving';
           audio.playCowMoo();
-          this.triggerJugaadToast('🎉 JUGAAD 3: GAU MATA RASTA CLEAR! (+25%)');
+          this.triggerJugaadToast(' JUGAAD 3: GAU MATA RASTA CLEAR! (+25%)');
           this.showDialogue(
-            'Chacha',
+            'Mom',
             'Gau Mata khush, rasta saaf! Ab vaapis scooter pe chalo aur kick maarke VIP road niklo!'
           );
           this.questText.textContent = 'Vaapis Scooter ke paas jao aur Kickstart [E] karke VIP Road niklo!';
           return;
         } else {
-          this.showDialogue('Chacha', carried.userData.rejectMsg || 'Gau Mata isko nahi khayengi!');
+          this.showDialogue('Mom', carried.userData.rejectMsg || 'Gau Mata isko nahi khayengi!');
           return;
         }
       }
@@ -771,7 +779,7 @@ class Game {
         audio.startScooterEngine();
         audio.playHorn();
         this.showDialogue(
-          'Chacha',
+          'Mom',
           'Dhup-dhup-dhup! Scooter start! Ab steering sambhalo, aur dhyan se phatte ke upar se nikalna!'
         );
         this.questText.textContent = 'Dhyan se chalayein! Phatte ke upar se gaddhe ko cross karein!';
@@ -888,7 +896,7 @@ class Game {
           this.isFalling = true;
           audio.playSplash();
           audio.playBrickThud();
-          this.showDialogue('Chacha', 'Arey Baap Re! 2 meter gehre gaddhe me gir gaye! Phatte ke upar se chalo!');
+          this.showDialogue('Mom', 'Arey Baap Re! 2 meter gehre gaddhe me gir gaye! Phatte ke upar se chalo!');
           this.triggerJugaadToast('⚠️ SPLASH! GEHRE GADDHE ME GIR GAYE!');
           this.player.position.y = -2.0;
 
@@ -961,8 +969,8 @@ class Game {
           audio.stopScooterEngine();
           audio.playSplash();
           audio.playBrickThud();
-          this.triggerJugaadToast('💥 CRASH! SCOOTER GEHRE GADDHE ME GIR GAYI!');
-          this.showDialogue('Chacha', 'Arey miyaan! Dhyan se handle sambhalo, phatte ke side me gehre khadde me gira diya!');
+          this.triggerJugaadToast(' CRASH! SCOOTER GEHRE GADDHE ME GIR GAYI!');
+          this.showDialogue('Mom', 'Arey miyaan! Dhyan se handle sambhalo, phatte ke side me gehre khadde me gira diya!');
 
           // Dip deep into trench
           this.scooter.position.y = -1.8;
@@ -1013,7 +1021,7 @@ class Game {
 
         this.triggerJugaadToast('🏆 VICTORY: LEVEL 1 CLEARED! 🏆');
         this.showDialogue(
-          'Chacha',
+          'Mom',
           'Wah Miyaan! Bada Talab VIP Road pahunch gaye! Bhopal me koi mushkil nahi jo Jugaad se na suljhe!'
         );
         this.questText.textContent = '🌟 CONGRATULATIONS! You mastered the Bhopal Mohalla Jugaad!';
