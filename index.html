@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JUGAAD: Bas Pahunchna Hai</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body, html {
+      width: 100%; height: 100%; overflow: hidden;
+      background: #121212;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    #game-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+    /* Modern Typography & Colors */
+    :root {
+      --primary: #f39c12;
+      --secondary: #27ae60;
+      --dark: #1e1e1e;
+      --darker: #121212;
+      --text: #ecf0f1;
+      --text-muted: #95a5a6;
+    }
+
+    /* Landing Screen */
+    #landing-screen {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: radial-gradient(circle at center, var(--dark), var(--darker));
+      z-index: 2000;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: var(--text); text-align: center;
+    }
+    .landing-logo {
+      font-size: 3.5rem; font-weight: 900; color: var(--primary);
+      text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px;
+    }
+    .landing-sublogo {
+      font-size: 1.2rem; color: var(--text-muted); font-weight: 400; margin-bottom: 30px;
+      font-style: italic;
+    }
+    .btn-menu {
+      background: var(--primary); color: #fff; border: none; padding: 15px 40px;
+      font-size: 1.1rem; font-weight: 700; border-radius: 4px; cursor: pointer;
+      text-transform: uppercase; letter-spacing: 1px; transition: 0.2s ease;
+      margin: 10px; min-width: 200px;
+    }
+    .btn-menu:hover { background: #d68910; transform: translateY(-2px); }
+    .btn-menu-outline {
+      background: transparent; border: 1px solid var(--text-muted); color: var(--text);
+    }
+    .btn-menu-outline:hover { background: rgba(255,255,255,0.1); }
+
+    /* UI Overlay during gameplay */
+    #ui-overlay {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none; display: flex; flex-direction: column; justify-content: space-between;
+      padding: 20px;
+    }
+    .hud-top { display: flex; justify-content: space-between; align-items: flex-start; pointer-events: auto; }
+    
+    .title-card {
+      background: rgba(0,0,0,0.7); border-left: 4px solid var(--primary);
+      padding: 12px 20px; color: var(--text); border-radius: 0 4px 4px 0;
+    }
+    .title-card h1 { font-size: 1.1rem; font-weight: 700; margin-bottom: 4px; }
+    .title-card p { font-size: 0.85rem; color: var(--text-muted); }
+
+    .jugaad-meter-container {
+      background: rgba(0,0,0,0.7); padding: 12px 20px; border-radius: 4px;
+      width: 250px; border-right: 4px solid var(--secondary);
+    }
+    .jugaad-meter-label {
+      font-size: 0.85rem; font-weight: 700; color: var(--secondary);
+      display: flex; justify-content: space-between; margin-bottom: 8px; text-transform: uppercase;
+    }
+    .jugaad-bar-bg {
+      width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;
+    }
+    .jugaad-bar-fill {
+      height: 100%; width: 0%; background: var(--secondary); transition: width 0.3s ease;
+    }
+
+    .quest-banner {
+      align-self: center; background: rgba(0,0,0,0.8); padding: 10px 25px;
+      border-radius: 4px; color: #fff; font-size: 1rem; font-weight: 500;
+      pointer-events: auto; text-align: center; border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .dialogue-box {
+      align-self: center; background: rgba(0,0,0,0.85); border-radius: 4px;
+      padding: 20px 30px; max-width: 600px; color: var(--text); display: none;
+      pointer-events: auto; margin-bottom: 20px; border-left: 4px solid var(--primary);
+    }
+    .dialogue-speaker { color: var(--primary); font-weight: 700; font-size: 0.95rem; margin-bottom: 8px; text-transform: uppercase; }
+    .dialogue-text { font-size: 1.05rem; line-height: 1.5; }
+
+    .prompt-tip {
+      position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.8); color: var(--text); padding: 10px 25px;
+      border-radius: 4px; font-size: 0.9rem; pointer-events: auto; text-align: center;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .jugaad-popup {
+      position: absolute; top: 20%; left: 50%; transform: translate(-50%, -50%) scale(0.8);
+      background: var(--secondary); color: #fff; font-weight: 800; font-size: 1.2rem;
+      padding: 15px 30px; border-radius: 4px; opacity: 0; pointer-events: none;
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); text-align: center;
+      text-transform: uppercase; letter-spacing: 1px;
+    }
+    .jugaad-popup.show { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+
+    /* Modals */
+    .modal {
+      display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.9); z-index: 3000; align-items: center; justify-content: center; pointer-events: auto;
+    }
+    .modal-card {
+      background: var(--dark); padding: 40px; border-radius: 8px; text-align: center; color: var(--text);
+      max-width: 500px; border-top: 4px solid var(--primary); box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .modal-card h2 { font-size: 2rem; color: var(--primary); margin-bottom: 15px; }
+    .modal-card p { font-size: 1.1rem; color: var(--text-muted); margin-bottom: 30px; }
+    
+    /* Top Right Buttons */
+    .btn-sound-toggle {
+      position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.6);
+      border: 1px solid rgba(255,255,255,0.1); color: var(--text); width: 40px; height: 40px;
+      border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 2500;
+    }
+
+    /* Minimalist On-Screen Controls */
+    .controls-container {
+      position: absolute; bottom: 20px; right: 20px; display: flex; gap: 15px; pointer-events: auto;
+    }
+    .btn-act {
+      width: 50px; height: 50px; background: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 4px; color: var(--text); font-weight: 700; font-size: 1rem; cursor: pointer;
+    }
+    .btn-act:active { background: rgba(255,255,255,0.2); }
+    .btn-act.primary { background: var(--primary); border-color: var(--primary); color: #000; }
+  </style>
+</head>
+<body>
+
+  <button id="btn-toggle-sound" class="btn-sound-toggle">SND</button>
+
+  <div id="landing-screen">
+    <div class="landing-logo">JUGAAD</div>
+    <div class="landing-sublogo">"Perfect solution nahi chahiye. Bas kaam ho jaana chahiye."</div>
+    <button id="btn-start-game" class="btn-menu">Start Journey</button>
+  </div>
+
+  <div id="game-container"></div>
+
+  <div id="ui-overlay" style="display: none;">
+    <div class="hud-top">
+      <div class="title-card">
+        <h1>Bas Pahunchna Hai</h1>
+        <p>Current Objective</p>
+      </div>
+      <div class="quest-banner" id="quest-text">Get out of the house.</div>
+      <div class="jugaad-meter-container">
+        <div class="jugaad-meter-label"><span>Jugaad Meter</span><span id="meter-percent">0%</span></div>
+        <div class="jugaad-bar-bg">
+          <div class="jugaad-bar-fill" id="jugaad-bar-fill"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dialogue-box" id="dialogue-box">
+      <div class="dialogue-speaker" id="dialogue-speaker">Player</div>
+      <div class="dialogue-text" id="dialogue-text">...</div>
+    </div>
+
+    <div class="jugaad-popup" id="jugaad-popup">Jugaad Success!</div>
+    
+    <div class="prompt-tip" id="prompt-text">Use [W,A,S,D] to Move. [E] to Interact.</div>
+    
+    <div class="controls-container">
+      <button class="btn-act" id="btn-honk">HNK</button>
+      <button class="btn-act primary" id="btn-e">ACT</button>
+    </div>
+  </div>
+
+  <div id="accident-modal" class="modal">
+    <div class="modal-card">
+      <h2 style="color: #e74c3c;">Failed!</h2>
+      <p id="accident-text">You got stuck.</p>
+      <button id="btn-accident-respawn" class="btn-menu">Try Again</button>
+    </div>
+  </div>
+
+  <div id="victory-modal" class="modal">
+    <div class="modal-card">
+      <h2>Destination Reached!</h2>
+      <p>Bhai... jugaad se hi sahi, pahunch gaye!</p>
+      <button id="btn-replay" class="btn-menu">Play Again</button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
