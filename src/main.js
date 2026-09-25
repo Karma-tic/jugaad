@@ -60,10 +60,6 @@ class Game {
     // Street Environment
     this.env = AssetFactory.createStreetEnvironment();
     this.scene.add(this.env);
-    this.env.visible = false;
-    this.scooter.visible = false;
-    this.cow.visible = false;
-    this.trench.visible = false;
     this.house = AssetFactory.createHouseInterior();
     this.house.position.set(-95, 0, 0);
     this.scene.add(this.house);
@@ -149,6 +145,12 @@ class Game {
 
     this.isAccident = false;
     this.shakeDuration = 0;
+    
+    // Hide street initially
+    this.env.visible = false;
+    this.scooter.visible = false;
+    this.cow.visible = false;
+    this.trench.visible = false;
 
     this.initExhaustParticles();
     this.initConfetti();
@@ -1044,9 +1046,9 @@ class Game {
         this.triggerJugaadToast(' VICTORY: LEVEL 1 CLEARED! ');
         this.showDialogue(
           'Mom',
-          'Wah Miyaan! Bada Talab VIP Road pahunch gaye! Bhopal me koi mushkil nahi jo Jugaad se na suljhe!'
+          'Wah! Destination pahunch gaye! Jugaad se sab kuch mumkin hai!'
         );
-        this.questText.textContent = '🌟 CONGRATULATIONS! You mastered the Bhopal Mohalla Jugaad!';
+        this.questText.textContent = '🌟 CONGRATULATIONS! You mastered the Jugaad: Bas Pahunchna Hai!';
         this.promptTip.innerHTML = 'Wah Miyaan! 100% Desi Swag Champion! ';
 
         // Show Full Victory Modal
