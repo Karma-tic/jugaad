@@ -159,6 +159,14 @@ class Game {
 
     this.initExhaustParticles();
     this.initConfetti();
+    
+    // Apply shadows to all meshes
+    this.scene.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
   }
 
   initExhaustParticles() {

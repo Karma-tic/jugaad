@@ -1,7 +1,70 @@
 import * as THREE from 'three';
 
 // High-Fidelity Stylized 3D Asset Factory (Pixar/DreamWorks aesthetic)
-export class AssetFactory {
+export 
+class TextureGenerator {
+  static createNoiseTexture(color1, color2, width=256, height=256, noiseScale=50) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = color1;
+    ctx.fillRect(0, 0, width, height);
+    
+    for (let i = 0; i < (width * height) / 2; i++) {
+      const x = Math.random() * width;
+      const y = Math.random() * height;
+      ctx.fillStyle = color2;
+      ctx.globalAlpha = Math.random() * 0.15;
+      ctx.fillRect(x, y, Math.random() * noiseScale, Math.random() * noiseScale);
+    }
+    
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+  }
+
+  static createBrickTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext('2d');
+    
+    ctx.fillStyle = '#b0bec5'; // mortar color
+    ctx.fillRect(0, 0, 512, 512);
+    
+    const rows = 16;
+    const cols = 8;
+    const h = 512 / rows;
+    const w = 512 / cols;
+    
+    for (let r = 0; r < rows; r++) {
+      const offset = (r % 2 === 0) ? 0 : w / 2;
+      for (let c = -1; c < cols; c++) {
+        const x = c * w + offset;
+        const y = r * h;
+        
+        ctx.fillStyle = '#c0392b'; // brick base
+        ctx.fillRect(x + 2, y + 2, w - 4, h - 4);
+        
+        // noise on brick
+        ctx.fillStyle = '#a93226';
+        ctx.globalAlpha = 0.5;
+        for (let i=0; i<10; i++) {
+           ctx.fillRect(x + 2 + Math.random()*(w-4), y + 2 + Math.random()*(h-4), 4, 4);
+        }
+        ctx.globalAlpha = 1.0;
+      }
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+  }
+}
+
+class AssetFactory {
   // 1. Stylized Pixar/Cartoon Boy (Matching Image 1) - Standing / Walking
   static createCartoonBoy() {
     const character = new THREE.Group();
@@ -885,7 +948,9 @@ export class AssetFactory {
     const envGroup = new THREE.Group();
 
     // --- 1. TWO SEPARATE SOLID ROAD PLATFORMS WITH REAL 3.6m PHYSICAL VOID CHASM ---
-    const asphaltMat = new THREE.MeshStandardMaterial({ color: 0x292524, roughness: 0.92 });
+    const asphaltTex = TextureGenerator.createNoiseTexture('#292524', '#3f3f46', 512, 512, 2);
+    asphaltTex.repeat.set(10, 3);
+    const asphaltMat = new THREE.MeshStandardMaterial({ map: asphaltTex, roughness: 1.0 });
     const lineWhiteMat = new THREE.MeshBasicMaterial({ color: 0xf8fafc });
 
     // PLATFORM 1: APPROACH ROAD (x: -16.0 to 9.2, Solid elevated road at y = 0.0)
@@ -1048,14 +1113,18 @@ export class AssetFactory {
     const houseGroup = new THREE.Group();
     
     // Floor
+    const woodTex = TextureGenerator.createNoiseTexture('#8B4513', '#5D4037', 512, 512, 100);
+    woodTex.repeat.set(2, 2);
     const floorGeo = new THREE.PlaneGeometry(6, 6);
-    const floorMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.9 });
+    const floorMat = new THREE.MeshStandardMaterial({ map: woodTex, roughness: 0.9 });
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI / 2;
     floor.position.set(-3, 0.01, 0.5);
     houseGroup.add(floor);
 
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0x95a5a6, roughness: 1.0 });
+    const brickTex = TextureGenerator.createBrickTexture();
+    brickTex.repeat.set(1.5, 1);
+    const wallMat = new THREE.MeshStandardMaterial({ map: brickTex, roughness: 0.9, color: 0xdddddd });
     
     // Back Wall (z = -2.5)
     const backWall = new THREE.Mesh(new THREE.BoxGeometry(6, 4, 0.2), wallMat);
