@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head></head>
+<body>
+<script type="module">
+  import { initGame } from './src/main.js';
+  try {
+    initGame();
+    console.log("SUCCESS");
+  } catch(e) {
+    console.error("ERROR:", e);
+    document.body.innerHTML = "ERROR: " + e.message + " <br>" + e.stack;
+  }
+</script>
+</body>
+</html>

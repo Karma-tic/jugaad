@@ -3,3 +3,7 @@ dist
 .vscode
 .idea
 *.log
+.DS_Store
+backup_before_room_jugaads/
+backup_before_final_merge/
+Claude outputs/

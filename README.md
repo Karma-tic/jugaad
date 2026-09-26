@@ -1,81 +1,120 @@
 # Bhopali Safar: The Great Desi Jugaad 🛵💨
 
-> **MP Game Udaan 2026 Hackathon Project**  
-> **Theme:** JUGAAD (Desi Problem Solving & Quick Street Fixes)  
-> **Location Setting:** Old Bhopal, Madhya Pradesh
+> **🏆 Official Entry for MP Game Udaan 2026 Hackathon**  
+> **Theme:** JUGAAD (Desi Problem Solving, Street Engineering & Comic Hacks)  
+> **Setting:** Authentic Streets of Old Bhopal, Madhya Pradesh  
+> **Platform:** WebGL / Three.js (Optimized for Laptop & Desktop Widescreen)
 
 ---
 
-## 🎮 About The Game
+## 👥 Creators & Team
 
-**Bhopali Safar: The Great Desi Jugaad** is a humorous 3D web-based comedy adventure game built using **Three.js** and **Vite**. 
-
-Chacha's vintage scooter has broken down in the heart of Old Bhopal! Between missing parts, deep municipal road excavation trenches, wandering street cows, and chai tapris, you must use iconic **Desi Jugaad** solutions to overcome each crisis and reach your destination before dusk.
-
----
-
-## ✨ Features
-
-- **Iconic Desi Jugaad Mechanics:**
-  - **Crisis 1: The Broken Kickstand:** Scooter stand missing? Find a classic red construction brick and prop it up.
-  - **Crisis 2: The Deep Trench Chasm:** A real 3.6m wide, 2.2m deep Bhopal Jal Nigam pipeline excavation pit blocks the road. Hunt for scrap timber balks and build a sturdy bridge.
-  - **Crisis 3: Gau Mata on the Highway:** A stubborn cow is resting in the middle of the road. Lure her safely aside with fresh green grass.
-  - **Crisis 4: Scooter Ride & Balance:** Kickstart the scooter and ride across the timber bridge without skidding into the ditch.
-- **Realistic 3D Trench & Underground Utility Details:**
-  - Layered geological strata retaining walls (clay, aggregate, broken asphalt overhangs).
-  - Exposed steel rebar sariya wires.
-  - Municipal water main pipeline and road hazard cones.
-- **Immersive Bhopal Atmosphere:**
-  - Chai stall (Tapri) with cutting chai glasses, kettle, and radio tunes.
-  - Classic vintage scooter with exhaust smoke puff simulation.
-  - Authentic comic Hindi dialogues and toast alerts.
-- **Cinematic Intro:** High-speed paper airplane launch across Bhopal city skyline.
+| Name | Role | Contributions |
+| :--- | :--- | :--- |
+| **Anoop Shukla** | **Team Head & Lead Game Architect** | Game Concept, Story Planning, 3D Architecture, Systems Design & Coordination |
+| **Sujeet P. Singh** | **Core Game Developer & Level Designer** | Three.js Procedural Modeling, Web Audio Synthesis, Physics & Collision Systems |
 
 ---
 
-## ⌨️ Controls
+## 📖 The Story: "Guddu Ka Sehra"
 
-- **Walking & Exploring:**
-  - **Arrow Keys / WASD:** Move Chacha around the street.
-  - **E / Click:** Interact with objects, pick up jugaad scrap items, and apply fixes.
-- **Riding the Scooter:**
-  - **Right Arrow / D:** Accelerate forward.
-  - **Left Arrow / A:** Brake / Reverse.
-  - **Up / Down Arrows (W / S):** Steer across road lanes to align with the bridge.
+Baaraat is standing at the gates of Sheesh Mahal, Bhopal! Pandit ji is furious, the auspicious wedding Muhurat is ticking away, and Guddu (the groom) is missing his wedding **Sehra**! 
+
+Chachi makes an urgent phone call to Chacha. In sheer shock, Chacha drops his phone on the verandah, shattering it into pieces. To make matters worse, his vintage **Bajaj Chetak** scooter has a snapped kickstand!
+
+Armed only with iconic **Desi Jugaad**, Chacha must:
+1. **Fix the Broken Phone:** Tape the shattered screen and back cover together.
+2. **Prop up the Chetak:** Find a red construction brick to support the broken kickstand.
+3. **Cross the Deep Trench:** Build a timber plank bridge across a 3.6m Bhopal Jal Nigam excavation pit.
+4. **Befriend Gau Mata:** Lure the sacred cow resting in the middle of the road with fresh green grass & roti from the Sabzi Mandi.
+5. **Reach Sheesh Mahal:** Navigate Chetak through old Bhopal streets and park in the VIP mandap bay before the 3-minute Muhurat runs out!
 
 ---
 
-## 🚀 Getting Started
+## 🎮 Key Features
+
+- **100% Procedural 3D WebGL:** Zero external heavy 3D assets or GLTF blobs. All 20+ stylized Pixar-aesthetic models (Chacha, Bajaj Chetak, Gau Mata, Sheesh Mahal, Jal Nigam Trench) are generated in real-time code.
+- **Iconic Desi Jugaad Puzzle Solving:** Solve problems using bricks, planks, and grass with authentic street logic.
+- **Web Audio API Sound Engine:** Procedural two-stroke Chetak engine frequency modulation, supersonic paper plane rocket whoosh, and retro Desi chiptune BGM.
+- **Interactive Intro Launch:** Supersonic Paper Plane flight that unlocks browser audio per strict Autoplay security policies.
+- **3-Mistake Comic Failsafe:** 3 hearts / lives with custom accident respawn mechanics and real-time 3:00 minute countdown clock.
+- **Project Info & Controls Modal:** Interactive 3-tab modal covering Controls, Technical Architecture, and Creator Credits.
+
+---
+
+## ⌨️ Controls & Keybindings
+
+> 💻 **Recommended Experience:** Laptop / Desktop with keyboard on a 16:9 widescreen display.
+
+| Action | Primary Key | Secondary Key |
+| :--- | :--- | :--- |
+| **Explore & Walk** | `W` `A` `S` `D` | `Arrow Keys` |
+| **Interact / Pick / Fix / Park** | `E` | Screen Tap / Click |
+| **Scooter Accelerate** | `D` | `Right Arrow` |
+| **Scooter Brake / Reverse** | `A` | `Left Arrow` |
+| **Scooter Lane Steering** | `W` / `S` | `Up` / `Down Arrows` |
+| **Desi Scooter Horn** | `Spacebar` | `H` or 📢 Button |
+
+---
+
+## 🚀 Getting Started & Local Setup
 
 ### Prerequisites
-- [Node.js](https://nodejs.org/) (v16 or higher recommended)
+- [Node.js](https://nodejs.org/) **v18 or higher** (LTS recommended) — check with `node -v`
+- A modern desktop browser (Chrome / Edge / Safari / Firefox) with WebGL 2
 
-### Quick Run (Windows 1-Click)
-Double-click `start-dev.bat` in the project root to automatically install dependencies and open the local development server in your default browser.
-
-### Manual Installation & Running
+### macOS / Linux 1-Click Launch
 ```bash
-# Clone the repository
-git clone https://github.com/AnoopShukla-ProjectWorld/Desi-Jugadh-Game.git
+bash start-dev.sh
+```
 
-# Enter project directory
-cd Desi-Jugadh-Game
+### Windows 1-Click Launch
+Double-click `start-dev.bat` in the project root. It installs dependencies if needed, starts the Vite dev server and opens the game.
 
-# Install dependencies
-npm install
+### Manual Setup (any OS)
+```bash
+# 1. Clone the repository
+git clone https://github.com/Karma-tic/jugaad.git
+cd jugaad
 
-# Start local development server
+# 2. Install the exact dependency versions from package-lock.json
+npm ci          # (or: npm install)
+
+# 3. Start the dev server, then open http://localhost:5173
 npm run dev
 
-# Build for production
+# 4. Optional: production build + preview
 npm run build
+npm run preview # opens http://localhost:4173
 ```
+
+> If the page looks old after an update, hard-refresh with **Cmd + Shift + R** (Mac) / **Ctrl + Shift + R** (Windows).
+
+### 🎬 Story Flow (2 Chapters)
+| Chapter | Page | What happens |
+| :--- | :--- | :--- |
+| **Chapter 1 – Guddu ka Kamra** | `index.html` | Room jugaads: fix the charger (timing mini-game), find items, and unlock the door. Leaving the room goes straight to Chapter 2. |
+| **Chapter 2 – Chacha ka Safar** | `chapter2.html` | Phone tape, brick kickstand, plank across the trench, grass for Gau Mata, park at Sheesh Mahal before the Muhurat. |
+
+You can also jump to Chapter 2 from the landing screen with the **Chapter 2** button.
+
+### ⚙️ Graphics Quality
+Open **Settings → Controls → Graphics Quality**: `Auto` (default, adapts to FPS), `Low`, `Medium`, `High`.
+On older laptops pick **Low** or **Medium** for smooth play.
 
 ---
 
-## 🛠️ Tech Stack
+## 🛠️ Technical Stack & Architecture
 
-- **Graphics & 3D Engine:** [Three.js](https://threejs.org/)
-- **Bundler & Build Tool:** [Vite](https://vitejs.dev/)
-- **Audio:** Web Audio API & procedural sound synthesis
-- **Styling:** Custom CSS animations & Tailwind typography
+- **Core Engine:** [Three.js](https://threejs.org/) (WebGL rendering, ShadowMap, Procedural Mesh Factory)
+- **Tooling & Bundler:** [Vite](https://vitejs.dev/) (Instant Hot Module Replacement & production chunking)
+- **Audio Synthesis:** Web Audio API (`AudioContext`, `OscillatorNode`, `BiquadFilterNode`, Gain Ramping)
+- **Physics & Collision:** Custom deterministic AABB (Axis-Aligned Bounding Box) collision system
+- **State Architecture:** Multi-phase Finite State Machine (Cutscenes, Free Walk, Driving, Accidents, Victory)
+
+---
+
+## 📜 License & Hackathon Attribution
+
+Developed for **MP Game Udaan 2026 Hackathon**.  
+All rights reserved © 2026 Anoop Shukla & Sujeet P. Singh.

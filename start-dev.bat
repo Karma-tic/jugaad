@@ -29,10 +29,7 @@ echo   Server ko stop karne ke liye is window me Ctrl + C dabayein.
 echo --------------------------------------------------------
 echo.
 
-:: Automatically open browser after 2 seconds
-start "" cmd /c "timeout /t 2 /nobreak >nul & start http://localhost:5173/"
-
-:: Start Vite dev server on port 5173 with host enabled
-call npx vite --port 5173 --host
+:: Start Vite dev server and automatically launch browser ONLY when server is 100% ready
+call npx vite --open --port 5173 --host
 
 pause

@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { audio } from './audio.js';
 import { AssetFactory } from './models.js';
+import { Graphics, bindQualitySelect, setupLoadingGate } from './graphics.js';
+import { applyWorldUVs } from './materials.js';
+import { InteractGuide, cachedTextSetter, injectGuideCSS } from './guide.js';
 
 class Game {
   constructor() {
@@ -16,6 +19,20 @@ class Game {
     this.plankHalfWidth = 0.95; // Sturdy bridge width
 
     this.keys = { left: false, right: false, up: false, down: false };
+    this.walkSpeed = 3.8; // natural brisk walking pace
+
+    // Room (Level 0) jugaad state
+    this.roomDone = new Set();
+    this.requiredRoom = ['chappal', 'kurta', 'phone'];
+    this.miniGame = null;
+    this.clock = new THREE.Clock();
+
+    // "10 baje tak pahunchna hai" – game clock starts at 9:30
+    this.gameMinutes = 9 * 60 + 30;
+    this.deadline = 10 * 60;
+    this.timerRunning = false;
+    this.secondsPerGameMinute = 10;
+    this.levelScore = 0;
 
     this.initScene();
     this.initUI();
@@ -36,7 +53,7 @@ class Game {
       0.1,
       1000
     );
-    this.camera.position.set(-98 + 3.2, 4.8, 0.5 + 8.8);
+    this.camera.position.set(-99.2 + 3.2, 4.8, 1.0 + 8.8);
     this.camera.lookAt(-2, 1.2, 0);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -44,18 +61,34 @@ class Game {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Realistic pipeline: HDR-ish interior reflections, soft shadows, AO, glow, SMAA
+    this.gfx = new Graphics(this.renderer, this.scene, this.camera);
+    this.gfx.useRoomEnvironment(0.45);
+    this.renderer.toneMappingExposure = 0.95;
     this.container.appendChild(this.renderer.domElement);
 
     // Sunset Lighting
     const hemiLight = new THREE.HemisphereLight(0xfffbeb, 0x78350f, 0.75);
     this.scene.add(hemiLight);
 
-    const sunLight = new THREE.DirectionalLight(0xf59e0b, 1.6);
-    sunLight.position.set(12, 24, 18);
+    const sunLight = new THREE.DirectionalLight(0xf59e0b, 2.2);
+    sunLight.position.set(27, 24, 18);
+    sunLight.target.position.set(15, 0, 0);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.width = 2048;
     sunLight.shadow.mapSize.height = 2048;
+    // Cover the whole street (x = -8 .. 38), not just the default ±5 box
+    const sc = sunLight.shadow.camera;
+    sc.left = -30; sc.right = 30; sc.top = 20; sc.bottom = -20; sc.near = 1; sc.far = 90;
+    sunLight.shadow.bias = -0.0005;
     this.scene.add(sunLight);
+    this.scene.add(sunLight.target);
+    this.sunLight = sunLight;
+
+    // Indoor "sitcom set" backdrop while in the room
+    this.streetBg = new THREE.Color(0xfbbf24);
+    this.roomBg = new THREE.Color(0x1e1631);
+    this.scene.background = this.roomBg;
 
     // Street Environment
     this.env = AssetFactory.createStreetEnvironment();
@@ -73,7 +106,7 @@ class Game {
 
     // Standing Pixar Boy Character
     this.player = AssetFactory.createCartoonBoy();
-    this.player.position.set(-98, 0, 0.5);
+    this.player.position.set(-99.2, 0, 1.0);
     this.scene.add(this.player);
 
     // Road Excavation Trench at x = 11
@@ -103,9 +136,13 @@ class Game {
     this.items.push(bottle);
 
     const brick = AssetFactory.createBrick();
-    brick.position.set(-97, 0, 1.5);
+    brick.position.set(-100.3, 0, -0.3);
+    brick.userData.icon = '🧱';
+    brick.userData.room = true;
     this.scene.add(brick);
     this.items.push(brick);
+
+    this.initRoomJugaads();
 
     const cardboard = AssetFactory.createCardboard();
     cardboard.position.set(4.8, 0, 2.0);
@@ -140,7 +177,11 @@ class Game {
       { type: 'box', minX: -102, maxX: -94, minZ: 3.5, maxZ: 4.5, name: 'WallFront' },   // Front Invisible Wall
       { type: 'box', minX: -102, maxX: -94, minZ: -3.5, maxZ: -2.0, name: 'WallBack' }, // Back Wall
       { type: 'box', minX: -95, maxX: -94, minZ: -3.5, maxZ: 4.5, name: 'WallRight' },   // Right Wall
-      { type: 'box', minX: -102, maxX: -100.5, minZ: -3.5, maxZ: 4.5, name: 'WallLeft' }// Left Wall
+      { type: 'box', minX: -102, maxX: -100.5, minZ: -3.5, maxZ: 4.5, name: 'WallLeft' },// Left Wall
+      // Room furniture (padded by ~player radius)
+      { type: 'box', minX: -98.05, maxX: -95.0, minZ: -2.8, maxZ: 1.8, name: 'Bed' },
+      { type: 'box', minX: -100.55, maxX: -98.45, minZ: -2.55, maxZ: -0.45, name: 'Table' },
+      { type: 'circle', x: -95.55, z: 2.3, radius: 0.3, name: 'PhoneStool' }
     ];
 
     // Dazed Character (Spawned after accident)
@@ -161,12 +202,283 @@ class Game {
     this.initConfetti();
     
     // Apply shadows to all meshes
+    applyWorldUVs(this.scene);
     this.scene.traverse((child) => {
       if (child.isMesh) {
         child.castShadow = true;
         child.receiveShadow = true;
       }
     });
+  }
+
+  // =====================================================================
+  // ROOM JUGAADS – "Taiyaari" before stepping out
+  // =====================================================================
+  initRoomJugaads() {
+    const addItem = (mesh, x, y, z, rotY = 0) => {
+      mesh.position.set(x, y, z);
+      mesh.rotation.y = rotY;
+      mesh.userData.room = true;
+      this.scene.add(mesh);
+      this.items.push(mesh);
+      return mesh;
+    };
+    addItem(AssetFactory.createSafetyPin(), -98.95, 1.05, -0.95);
+    addItem(AssetFactory.createSteelLota(), -98.25, 0, -1.9);
+    addItem(AssetFactory.createPhoneCharger(), -100.2, 0, 2.95, 0.6);
+    addItem(AssetFactory.createRubberBand(), -98.4, 0, 2.3);
+    addItem(AssetFactory.createBelan(), -96.9, 0, 2.95, 0.3);
+
+    this.roomProps = new THREE.Group();
+    this.roomProps.name = 'RoomProps';
+    this.scene.add(this.roomProps);
+
+    const chappal = AssetFactory.createBrokenChappal();
+    chappal.position.set(-100.1, 0, 1.7);
+    chappal.rotation.y = 0.4;
+    const kettle = AssetFactory.createKettleStove();
+    kettle.position.set(-99.45, 1.05, -1.8);
+    const paste = AssetFactory.createToothpaste();
+    paste.position.set(-100.0, 1.05, -1.1);
+    paste.rotation.y = 0.3;
+    const kurta = AssetFactory.createCrumpledKurta();
+    kurta.position.set(-96.5, 0.61, 0.5);
+    const phone = AssetFactory.createPhoneAndSocket();
+    phone.position.set(-95.45, 0, 2.3);
+    [chappal, kettle, paste, kurta, phone].forEach(m => this.roomProps.add(m));
+
+    const v = (x, z) => new THREE.Vector3(x, 0, z);
+    this.roomStations = [
+      {
+        id: 'chappal', label: 'Tooti Chappal', pos: v(-100.1, 1.7), radius: 1.6, accepts: 'safetypin',
+        markerY: 0.6, mesh: chappal,
+        toast: '📌 JUGAAD: SAFETY PIN SE CHAPPAL JUDI!',
+        line: 'Wah beta! Mummy ki safety pin ne chappal bacha li. Ab us silvat wale kurte ka kuch karo!',
+        wrongLine: 'Chappal ka strap toota hai. Kuch aisa lao jo usko jod de... Mummy ki pin dibbi table pe hai!',
+        onSolve: () => AssetFactory.fixChappal(chappal)
+      },
+      {
+        id: 'kettle', label: 'Garam Kettle', pos: v(-99.45, -1.5), radius: 1.9, accepts: 'lota', required: false,
+        markerY: 1.7, mesh: kettle, transformTo: { type: 'hotlota', title: 'Garam Lota (Hot!)', icon: '♨️',
+          rejectMsg: 'Garam lota hai! Isse kurte ki silvatein nikalo!' },
+        line: 'Lote me garam chai-paani bhar liya! Ab isse kurte pe press ki tarah chalao. Dhyaan se, garam hai!'
+      },
+      {
+        id: 'toothpaste', label: 'Khatam Toothpaste', pos: v(-100.0, -1.1), radius: 1.9, accepts: 'belan', bonus: true,
+        markerY: 1.5, mesh: paste,
+        toast: '🪥 BONUS JUGAAD: BELAN SE AAKHRI PASTE!',
+        line: 'Haha! Belan se tube ko bel diya, aakhri paste bhi nikal gaya. Asli Indian ghar!',
+        onSolve: () => { paste.userData.paste.visible = true; }
+      },
+      {
+        id: 'kurta', label: 'Silvat wala Kurta', pos: v(-96.5, 1.9), radius: 1.6, accepts: 'hotlota',
+        markerY: 1.2, mesh: kurta,
+        toast: '♨️ JUGAAD: LOTA PRESS! KURTA KADAK!',
+        line: 'Iron kharab tha, par garam lote ne kurta ekdum kadak kar diya! Ab phone charge kar lo, 1% bacha hai!',
+        wrongLine: 'Kurta itna silvat wala hai! Iron kharab hai... koi garam cheez chahiye. Lota + kettle?',
+        onSolve: () => { kurta.userData.crumpled.visible = false; kurta.userData.pressed.visible = true; }
+      },
+      {
+        id: 'phone', label: 'Phone 1%', pos: v(-95.6, 2.3), radius: 1.7, accepts: 'charger', miniGame: true,
+        markerY: 1.2, mesh: phone,
+        toast: '🔌 JUGAAD: TEDHA WIRE, PHONE CHARGING!',
+        line: 'Wire ko sahi angle pe tika diya, charging shuru! Ab darwaza kholo, jaam ho gaya hai!',
+        wrongLine: 'Phone 1% pe hai! Charger ka wire dheela hai, usko socket me lagao.',
+        onSolve: () => { phone.userData.screenMat.color.setHex(0x22c55e); phone.userData.cable.visible = true; }
+      }
+    ];
+  }
+
+  goToChapter2() {
+    try {
+      sessionStorage.setItem('jugaad_from_ch1', '1');
+      sessionStorage.setItem('bhopali_skip_flight', 'true');   // Chapter 2 page: no second plane intro
+      sessionStorage.removeItem('bhopali_in_game');
+      sessionStorage.removeItem('bhopali_stage');
+    } catch (e) {}
+    audio.stopScooterEngine();
+    const fade = document.getElementById('chapter-fade');
+    if (fade) fade.classList.add('show');
+    setTimeout(() => { window.location.href = 'chapter2.html'; }, fade ? 700 : 0);
+  }
+
+  getRoomStationsInRange(pos) {
+    if (this.stage !== 0 || !this.roomStations) return [];
+    return this.roomStations.filter(s => !this.roomDone.has(s.id) &&
+      Math.hypot(pos.x - s.pos.x, pos.z - s.pos.z) < s.radius);
+  }
+
+  completeRoomStation(st, carried) {
+    this.player.remove(carried);
+    this.inventory = null;
+    this.roomDone.add(st.id);
+    if (st.onSolve) st.onSolve();
+    this.triggerJugaadToast(st.toast);
+    this.addScore(st.bonus ? 100 : 150, 0);
+    this.levelScore += st.bonus ? 100 : 150;
+    this.showDialogue('Mom', st.line);
+    this.renderChecklist();
+    if (this.requiredRoom.every(id => this.roomDone.has(id))) {
+      this.questText.textContent = 'Taiyaar ho gaye! Ab Laal Eent se jaam darwaza kholo!';
+    }
+  }
+
+  renderChecklist() {
+    const list = document.getElementById('checklist-items');
+    if (!list) return;
+    const rows = [
+      { id: 'chappal', icon: '🩴', text: 'Chappal jodo' },
+      { id: 'kurta', icon: '👕', text: 'Kurta press karo' },
+      { id: 'phone', icon: '📱', text: 'Phone charge karo' },
+      { id: 'door', icon: '🚪', text: 'Darwaza kholo', locked: !this.requiredRoom.every(id => this.roomDone.has(id)) },
+      { id: 'toothpaste', icon: '🪥', text: 'Bonus: Toothpaste', bonus: true }
+    ];
+    list.innerHTML = rows.map(r => {
+      const done = this.roomDone.has(r.id) || (r.id === 'door' && this.stage > 0);
+      return `<li class="${done ? 'done' : ''} ${r.bonus ? 'bonus' : ''} ${r.locked ? 'locked' : ''}">
+        <span class="chk">${done ? '✔' : ''}</span><span class="ico">${r.icon}</span>${r.text}</li>`;
+    }).join('');
+    const count = this.requiredRoom.filter(id => this.roomDone.has(id)).length;
+    const cnt = document.getElementById('checklist-count');
+    if (cnt) cnt.textContent = `${count}/3`;
+  }
+
+  // --- Charger wire "sahi angle" mini-game ---
+  startWireMiniGame(st, carried) {
+    // Needle sweeps back and forth at a steady, predictable speed; wide green zone; misses never cost progress
+    this.miniGame = { st, carried, t: 0, hits: 0, zone: 0.65, width: 0.24, needle: 0.1, dir: 1, speed: 0.42, cooldown: 0 };
+    this.keys = { left: false, right: false, up: false, down: false };
+    const el = document.getElementById('wire-game');
+    el.classList.add('show');
+    this.renderWireGame();
+    this.showDialogue('Mom', 'Is charger ka wire ek hi angle pe chalta hai! Jab safed sui HARE zone ke andar ho tab [E] ya Space dabao — 3 baar!');
+    this.setWireStatus('Charging 0/3 — sui ko hare zone me pakdo!', '');
+  }
+
+  setWireStatus(text, cls) {
+    const el = document.getElementById('wire-status');
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'wire-status ' + (cls || '');
+  }
+
+  renderWireGame() {
+    const g = this.miniGame;
+    if (!g) return;
+    document.getElementById('wire-zone').style.left = `${(g.zone - g.width / 2) * 100}%`;
+    document.getElementById('wire-zone').style.width = `${g.width * 100}%`;
+    document.getElementById('wire-needle').style.left = `${g.needle * 100}%`;
+    document.querySelectorAll('#wire-pips .pip').forEach((p, i) => p.classList.toggle('on', i < g.hits));
+  }
+
+  wireGameTap() {
+    const g = this.miniGame;
+    if (!g || g.cooldown > 0) return;
+    g.cooldown = 0.3;
+    const el = document.getElementById('wire-game');
+    const hit = Math.abs(g.needle - g.zone) <= g.width / 2 + 0.01;
+    if (hit) {
+      g.hits++;
+      audio.playPlankSnap();
+      el.classList.remove('miss'); el.classList.add('hit');
+      setTimeout(() => el.classList.remove('hit'), 250);
+      if (g.hits >= 3) {
+        this.setWireStatus('Charging 3/3 — Phone charge ho raha hai! 🔋', 'ok');
+        this.renderWireGame();
+        setTimeout(() => {
+          el.classList.remove('show');
+          const { st, carried } = g;
+          this.miniGame = null;
+          this.completeRoomStation(st, carried);
+        }, 600);
+        return;
+      }
+      this.setWireStatus(`Charging ${g.hits}/3 — shabash! Ek baar aur...`, 'ok');
+      // next round: new spot, slightly faster, a little narrower (still generous)
+      g.zone = 0.2 + Math.random() * 0.6;
+      g.width = Math.max(0.18, g.width - 0.03);
+      g.speed += 0.08;
+    } else {
+      audio.playBrickThud();
+      this.setWireStatus(`Galat angle! Sui hare zone me aane do — Charging ${g.hits}/3`, 'bad');
+      el.classList.remove('hit'); el.classList.add('miss');
+      setTimeout(() => el.classList.remove('miss'), 300);
+    }
+    this.renderWireGame();
+  }
+
+  // --- Clock HUD ---
+  updateClock(delta) {
+    if (!this.timerRunning || this.stage >= 4) return;
+    this.gameMinutes += delta / this.secondsPerGameMinute;
+    const el = document.getElementById('hud-clock-time');
+    const box = document.getElementById('hud-clock');
+    if (!el) return;
+    const m = Math.floor(this.gameMinutes);
+    const h = Math.floor(m / 60), mm = m % 60;
+    el.textContent = `${h}:${mm.toString().padStart(2, '0')}`;
+    const left = this.deadline - this.gameMinutes;
+    box.classList.toggle('warn', left < 8 && left >= 0);
+    box.classList.toggle('late', left < 0);
+    const sub = document.getElementById('hud-clock-sub');
+    if (sub) sub.textContent = left < 0 ? 'LATE HO GAYE!' : `${Math.ceil(left)} min bache`;
+  }
+
+  // --- Floating [E] marker + inventory slot ---
+  updateMarker() {
+    if (!this.guide) return;
+    if (this.markerEl) this.markerEl.classList.remove('show');   // replaced by the labelled guide
+    if (this.markerTarget && !this.miniGame) {
+      const m = this.markerTarget;
+      this.guide.set({ pos: new THREE.Vector3(m.x, 0, m.z), height: m.y + 0.35, text: this.markerLabel || 'Use', kind: this.markerKind || 'pick' });
+    } else {
+      this.guide.clear();
+    }
+    this.guide.setObjective(this.stage === 0 && !this.miniGame ? this.roomObjective() : null, 1.9);
+    this.guide.update(this._lastDelta || 0.016, this.player.position);
+  }
+
+  // Next thing to go to in the room (drives the golden arrow)
+  roomObjective() {
+    const inv = this.inventory && this.inventory.userData.type;
+    const item = (type) => { const it = this.items.find(i => i.userData.type === type); return it ? it.position : null; };
+    const st = (id) => this.roomStations.find(s => s.id === id);
+    const at = (s) => new THREE.Vector3(s.mesh.position.x, s.mesh.position.y || 0, s.mesh.position.z);
+    if (!this.roomDone.has('chappal')) return inv === 'safetypin' ? at(st('chappal')) : (inv ? null : item('safetypin'));
+    if (!this.roomDone.has('kurta')) {
+      if (inv === 'hotlota') return at(st('kurta'));
+      if (inv === 'lota') return at(st('kettle'));
+      return inv ? null : item('lota');
+    }
+    if (!this.roomDone.has('phone')) return inv === 'charger' ? at(st('phone')) : (inv ? null : item('charger'));
+    if (inv === 'brick') return new THREE.Vector3(-101, 0, 0.8);
+    return inv ? null : item('brick');
+  }
+
+  updateInventorySlot() {
+    const key = this.inventory ? this.inventory.userData.title : '';
+    if (key === this._lastInvKey) return;
+    this._lastInvKey = key;
+    const slot = document.getElementById('inventory-slot');
+    if (!slot) return;
+    if (this.inventory) {
+      slot.classList.add('filled');
+      document.getElementById('inv-icon').textContent = this.inventory.userData.icon || '🎒';
+      document.getElementById('inv-name').textContent = this.inventory.userData.title;
+      slot.classList.remove('pop'); void slot.offsetWidth; slot.classList.add('pop');
+    } else {
+      slot.classList.remove('filled');
+      document.getElementById('inv-icon').textContent = '✋';
+      document.getElementById('inv-name').textContent = 'Haath khaali';
+    }
+  }
+
+  showInfo(title, body) {
+    const m = document.getElementById('info-modal');
+    if (!m) return;
+    document.getElementById('info-title').textContent = title;
+    document.getElementById('info-body').textContent = body;
+    m.style.display = 'flex';
   }
 
   initExhaustParticles() {
@@ -239,27 +551,55 @@ class Game {
     this.dialogueBox = document.getElementById('dialogue-box');
     this.dialogueSpeaker = document.getElementById('dialogue-speaker');
     this.dialogueText = document.getElementById('dialogue-text');
-    this.promptTip = document.getElementById('prompt-text');
+    this.promptTip = cachedTextSetter(document.getElementById('prompt-text'));
     this.jugaadPopup = document.getElementById('jugaad-popup');
     this.victoryModal = document.getElementById('victory-modal');
+    this.dialogueAvatar = document.getElementById('dialogue-avatar');
+    this.markerEl = document.getElementById('interact-marker');
+    injectGuideCSS();
+    this.guide = new InteractGuide(this.scene, this.camera);
+    this.questText.textContent = 'Taiyaar ho jao! Chappal, kurta aur phone — sab jugaad se theek karo!';
+    this.renderChecklist();
+    this.updateInventorySlot();
 
-    this.showDialogue(
-      'Mom',
-      'Beta jaldi uth! Aaj function hai. 10 baje tak pahunchna hai! Par room ka darwaza jam ho gaya hai, koi jugaad lagao darwaza kholne ka!'
-    );
+    this.dialogueBox.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      if (this.typing) this.finishTyping();
+      else this.dialogueBox.style.display = 'none';
+    });
   }
 
   showDialogue(speaker, text) {
     if ('speechSynthesis' in window) {
       try { window.speechSynthesis.cancel(); } catch (e) {}
     }
-    this.dialogueSpeaker.textContent = ` ${speaker}`;
-    this.dialogueText.textContent = `"${text}"`;
-    this.dialogueBox.style.display = 'block';
+    const avatars = { Mom: '👩🏽', Chacha: '🧔🏽', Papa: '👨🏽' };
+    this.dialogueSpeaker.textContent = speaker === 'Mom' ? 'Mummy' : speaker;
+    if (this.dialogueAvatar) this.dialogueAvatar.textContent = avatars[speaker] || '🙂';
+    this.dialogueBox.style.display = 'flex';
+    this.dialogueBox.classList.remove('pop'); void this.dialogueBox.offsetWidth; this.dialogueBox.classList.add('pop');
+
+    clearInterval(this.typeInterval);
+    clearTimeout(this.dialogueTimeout);
+    this.fullDialogue = text;
+    let i = 0;
+    this.typing = true;
+    this.dialogueText.textContent = '';
+    this.typeInterval = setInterval(() => {
+      i += 2;
+      this.dialogueText.textContent = text.slice(0, i);
+      if (i >= text.length) this.finishTyping();
+    }, 24);
+  }
+
+  finishTyping() {
+    clearInterval(this.typeInterval);
+    this.typing = false;
+    this.dialogueText.textContent = this.fullDialogue;
     clearTimeout(this.dialogueTimeout);
     this.dialogueTimeout = setTimeout(() => {
       this.dialogueBox.style.display = 'none';
-    }, 5500);
+    }, 2500 + this.fullDialogue.length * 40);
   }
 
   triggerJugaadToast(title) {
@@ -281,8 +621,9 @@ class Game {
     window.addEventListener('resize', () => {
       this.camera.aspect = window.innerWidth / window.innerHeight;
       this.camera.updateProjectionMatrix();
-      this.renderer.setSize(window.innerWidth, window.innerHeight);
+      this.gfx.resize();
     });
+    bindQualitySelect(this.gfx);
 
     window.addEventListener('keydown', (e) => {
       audio.init();
@@ -293,7 +634,8 @@ class Game {
       if (e.code === 'ArrowUp' || e.code === 'KeyW') this.keys.up = true;
       if (e.code === 'ArrowDown' || e.code === 'KeyS') this.keys.down = true;
 
-      if (e.code === 'KeyE') this.handleAction();
+      if (e.code === 'KeyE' && !e.repeat) this.handleAction();
+      if (e.code === 'Space' && this.miniGame && !e.repeat) { e.preventDefault(); this.wireGameTap(); return; }
       if (e.code === 'Space' || e.code === 'KeyH') {
         audio.playHorn();
       }
@@ -358,6 +700,13 @@ class Game {
       audio.init();
       if (!audio.musicPlaying) audio.startDesiBGM();
       this.handleAction();
+    });
+
+    // Continue the story in Chapter 2 (Chacha ka Safar – chapter2.html)
+    const goChapter2 = () => this.goToChapter2();
+    ['btn-next-chapter', 'btn-chapter-2'].forEach(id => {
+      const b = document.getElementById(id);
+      if (b) b.addEventListener('click', (e) => { e.stopPropagation(); goChapter2(); });
     });
 
     // Replay button inside victory modal
@@ -474,22 +823,40 @@ class Game {
         }
       };
 
-      // 1. Start flight immediately on page load (0ms delay)
-      requestAnimationFrame(stepFlight);
+      // User Interaction Launch: Guarantees 100% audio unlock per browser Autoplay policy!
+      let flightStarted = false;
 
-      // 2. Play supersonic plane whoosh audio ONLY for the flight
-      audio.playPlaneWhoosh();
+      const launchFlight = (e) => {
+        if (flightStarted) return;
+        flightStarted = true;
+        if (e && e.stopPropagation) e.stopPropagation();
 
-      // If browser autoplay policy initially suspended audio on page reload,
-      // allow first click to resume it ONLY while plane is still airborne!
-      const unlockDuringFlight = () => {
-        if (!flightEnded) {
-          audio.init();
-          audio.playPlaneWhoosh();
+        introScreen.removeEventListener('pointerdown', launchFlight);
+        window.removeEventListener('keydown', onKeyDown);
+
+        const prompt = document.getElementById('intro-launch-prompt');
+        if (prompt) {
+          prompt.style.opacity = '0';
+          prompt.style.transition = 'opacity 0.2s ease';
+          setTimeout(() => { prompt.style.display = 'none'; }, 220);
         }
-        window.removeEventListener('pointerdown', unlockDuringFlight);
+
+        // Initialize WebAudio & HTML5 audio synchronously inside explicit user gesture
+        audio.init();
+        audio.playPlaneWhoosh();
+
+        // Launch smooth constant-speed supersonic flight!
+        requestAnimationFrame(stepFlight);
       };
-      window.addEventListener('pointerdown', unlockDuringFlight);
+
+      const onKeyDown = (e) => {
+        if (e.code === 'Space' || e.code === 'Enter') {
+          launchFlight(e);
+        }
+      };
+
+      introScreen.addEventListener('pointerdown', launchFlight);
+      window.addEventListener('keydown', onKeyDown);
     }
 
     // 2. Landing Screen & Sound Toggle
@@ -498,7 +865,7 @@ class Game {
       btnToggleSound.addEventListener('click', (e) => {
         e.stopPropagation();
         const isMuted = audio.toggleMute();
-        btnToggleSound.textContent = isMuted ? 'Sound Off' : 'Sound On';
+        btnToggleSound.textContent = isMuted ? '🔇' : '🔊';
         btnToggleSound.title = isMuted ? 'Unmute Sound' : 'Mute Sound';
       });
     }
@@ -510,7 +877,7 @@ class Game {
         audio.init();
         audio.playJugaadSuccess();
         this.addScore(150, 0);
-        alert(" DESI JUGAAD HACK #1 (Bhopal Scooter Secret):\n\n'Agar scooter ki kick jam ho jaye ya subah thand me start na ho — gaadi ko 45° right tilt karke 3 second ruko, phir single kick maaro, 100% start!'\n\n Bonus: +150 Desi Swag Points Added!");
+        this.showInfo('🎁 Desi Hack #1: Bhopal Scooter Secret', "Agar scooter ki kick jam ho jaye ya subah thand me start na ho — gaadi ko 45° right tilt karke 3 second ruko, phir single kick maaro, 100% start!  (+150 Swag)");
       });
     }
 
@@ -520,7 +887,7 @@ class Game {
         audio.init();
         audio.playJugaadSuccess();
         this.addScore(150, 0);
-        alert(" DESI JUGAAD HACK #2 (Universal Desi Rule):\n\n'Gaadi ka fuse udd jaye toh mohalle ke paan wale se safety pin ya cigarette silver foil lo aur socket bypass karo! Desi jugaad zindabad!'\n\n Bonus: +150 Desi Swag Points Added!");
+        this.showInfo('🎁 Desi Hack #2: Universal Desi Rule', "Chappal tooti? Safety pin. Remote dheela? Rubber band. Iron kharab? Garam lota. Desi jugaad zindabad!  (+150 Swag)");
       });
     }
 
@@ -534,7 +901,21 @@ class Game {
       if (levelMapScreen) levelMapScreen.style.display = 'none';
       audio.init();
       if (!audio.musicPlaying) audio.startDesiBGM();
+      if (!this.timerRunning) {
+        this.timerRunning = true;
+        this.clock.getDelta();
+        this.showDialogue('Mom',
+          'Beta jaldi uth! 10 baje tak function pahunchna hai! Par dekh — chappal tooti, kurta silvat wala, phone 1% pe, aur darwaza bhi jaam! Jugaad lagao!');
+      }
     };
+
+    const btnWireTap = document.getElementById('btn-wire-tap');
+    if (btnWireTap) btnWireTap.addEventListener('pointerdown', (e) => { e.stopPropagation(); this.wireGameTap(); });
+
+    const btnInfoClose = document.getElementById('btn-info-close');
+    if (btnInfoClose) btnInfoClose.addEventListener('click', () => {
+      document.getElementById('info-modal').style.display = 'none';
+    });
 
     const btnStart = document.getElementById('btn-start-game');
     if (btnStart) btnStart.addEventListener('click', startGame);
@@ -569,23 +950,46 @@ class Game {
         if (settingsModal) settingsModal.style.display = 'none';
       });
     }
+
+    // Modal Tab Switching: Controls vs Tech Architecture vs Creators & Team
+    const btnTabControls = document.getElementById('btn-tab-controls');
+    const btnTabTech = document.getElementById('btn-tab-tech');
+    const btnTabTeam = document.getElementById('btn-tab-team');
+    const tabContentControls = document.getElementById('tab-content-controls');
+    const tabContentTech = document.getElementById('tab-content-tech');
+    const tabContentTeam = document.getElementById('tab-content-team');
+
+    const switchTab = (activeBtn, activeContent) => {
+      [btnTabControls, btnTabTech, btnTabTeam].forEach(btn => btn && btn.classList.remove('active'));
+      [tabContentControls, tabContentTech, tabContentTeam].forEach(content => content && (content.style.display = 'none'));
+      if (activeBtn) activeBtn.classList.add('active');
+      if (activeContent) activeContent.style.display = 'block';
+    };
+
+    if (btnTabControls) btnTabControls.addEventListener('click', () => switchTab(btnTabControls, tabContentControls));
+    if (btnTabTech) btnTabTech.addEventListener('click', () => switchTab(btnTabTech, tabContentTech));
+    if (btnTabTeam) btnTabTeam.addEventListener('click', () => switchTab(btnTabTeam, tabContentTeam));
   }
 
   initStats() {
     let savedStars = localStorage.getItem('bhopali_stars') || '3';
-    let savedScore = localStorage.getItem('bhopali_swag') || '1000';
+    let savedScore = localStorage.getItem('bhopali_total_swag') || localStorage.getItem('bhopali_swag') || '1000';
+    let savedHigh = localStorage.getItem('bhopali_high_score') || '0';
     const topStars = document.getElementById('top-stars');
     const topScore = document.getElementById('top-score');
+    const topHigh = document.getElementById('top-high-score');
     if (topStars) topStars.textContent = savedStars;
     if (topScore) topScore.textContent = savedScore;
+    if (topHigh) topHigh.textContent = savedHigh;
   }
 
   addScore(points, stars = 0) {
-    let currentScore = parseInt(localStorage.getItem('bhopali_swag') || '1000', 10);
+    let currentScore = parseInt(localStorage.getItem('bhopali_total_swag') || localStorage.getItem('bhopali_swag') || '1000', 10);
     let currentStars = parseInt(localStorage.getItem('bhopali_stars') || '3', 10);
     currentScore += points;
     currentStars = Math.min(12, currentStars + stars);
     localStorage.setItem('bhopali_swag', currentScore.toString());
+    localStorage.setItem('bhopali_total_swag', currentScore.toString());   // shared with Chapter 2's landing stats
     localStorage.setItem('bhopali_stars', currentStars.toString());
     const topStars = document.getElementById('top-stars');
     const topScore = document.getElementById('top-score');
@@ -664,6 +1068,7 @@ class Game {
   // Handle Pick, Place, Inspect, and Mount
   handleAction() {
     if (this.isFalling) return;
+    if (this.miniGame) { this.wireGameTap(); return; }
     const pPos = this.player.position;
 
     // 1. Not carrying: Pick up nearest item
@@ -685,6 +1090,7 @@ class Game {
         this.scene.remove(nearestItem);
         this.player.add(nearestItem);
         nearestItem.position.set(0, 1.0, 0.4);
+        nearestItem.rotation.set(0, 0, 0);
         audio.playBrickThud();
         this.promptTip.innerHTML = `Carrying: <b>${nearestItem.userData.title}</b>. Press [E] to use or drop!`;
         return;
@@ -695,10 +1101,34 @@ class Game {
     if (this.inventory) {
       const carried = this.inventory;
 
+      // ROOM JUGAADS: stations that accept the carried item win first
+      const inRange = this.getRoomStationsInRange(pPos);
+      const match = inRange.find(s => s.accepts === carried.userData.type);
+      if (match) {
+        if (match.transformTo) {
+          Object.assign(carried.userData, match.transformTo);
+          if (carried.userData.steam) carried.userData.steam.visible = true;
+          this.roomDone.add(match.id);
+          audio.playJugaadSuccess();
+          this.showDialogue('Mom', match.line);
+          this.updateInventorySlot();
+          return;
+        }
+        if (match.miniGame) { this.startWireMiniGame(match, carried); return; }
+        this.completeRoomStation(match, carried);
+        return;
+      }
+
       // CRISIS 1: Near House Door in Trailer Level (x=-101)
       const distToDoor = pPos.distanceTo(new THREE.Vector3(-101, 0, 0.5));
-      if (this.stage === 0 && distToDoor < 3.5) {
+      const isBrick = carried.userData.type === 'brick';
+      if (this.stage === 0 && ((isBrick && distToDoor < 3.5) || (!isBrick && distToDoor < 1.8 && !inRange.length && this.lastRejectId !== 'door'))) {
         if (carried.userData.type === 'brick') {
+          if (!this.requiredRoom.every(id => this.roomDone.has(id))) {
+            const missing = this.roomStations.filter(s => this.requiredRoom.includes(s.id) && !this.roomDone.has(s.id)).map(s => s.label);
+            this.showDialogue('Mom', `Aise hi jaoge function me?! Pehle yeh theek karo: ${missing.join(', ')}.`);
+            return;
+          }
           this.player.remove(carried);
           // Don't add brick back, just destroy it
           
@@ -709,32 +1139,28 @@ class Game {
             });
           }
           
-          // TELEPORT to street level
-          setTimeout(() => {
-              this.house.visible = false;
-              this.items.forEach(item => item.visible = true);
-              this.env.visible = true;
-              this.scooter.visible = true;
-              this.cow.visible = true;
-              this.trench.visible = true;
-              this.player.position.set(-4, 0, 0.5);
-              this.camera.position.set(-4 + 3.2, 4.8, 0.5 + 8.8); // Snap camera
-              this.scooter.rotation.x = 0; // Fix scooter stand implicitly
-          }, 800);
+          // Room level done -> continue the story straight into Chapter 2 (Chacha ka Safar)
+          this.timerRunning = false;
+          setTimeout(() => this.goToChapter2(), 2600);
 
           this.inventory = null;
           this.stage = 1;
           this.updateMeter(25);
           audio.playBrickThud();
-          this.triggerJugaadToast('JUGAAD 1: DOOR OPENED! (+25%)');
+          this.triggerJugaadToast('🧱 JUGAAD: EENT SE DARWAZA KHULA! (+25%)');
+          this.levelScore += 150;
+          const minsLeft = this.deadline - this.gameMinutes;
+          this.addScore(150, minsLeft > 15 ? 3 : (minsLeft > 5 ? 2 : 1));
+          this.renderChecklist();
           this.showDialogue(
             'Mom',
-            'Brick used as door stopper! You are out of the house. Now get on the scooter, but beware of the broken road!'
+            'Eent maar ke jaam darwaza khul gaya! Shabash, ekdum taiyaar! Chalo bahar, Chacha ke ghar chalte hain!'
           );
-          this.questText.textContent = 'Get on the scooter [E], but there is a trench ahead! Find a wooden plank!';
+          this.questText.textContent = 'Darwaza khul gaya! Bahar nikal rahe hain...';
           return;
         } else {
-          this.showDialogue('Mom', carried.userData.rejectMsg || 'Yeh darwaza nahi khol sakta!');
+          this.lastRejectId = 'door';
+          this.showDialogue('Mom', 'Isse jaam darwaza nahi khulega! Koi bhari cheez chahiye thokne ke liye.');
           return;
         }
       }
@@ -796,10 +1222,21 @@ class Game {
         }
       }
 
+      // Wrong item at a room station
+      // (first press explains, second press just drops the item)
+      if (inRange.length && this.lastRejectId !== inRange[0].id) {
+        this.lastRejectId = inRange[0].id;
+        this.showDialogue('Mom', inRange[0].wrongLine || carried.userData.rejectMsg || 'Isse kaam nahi banega beta!');
+        this.promptTip.innerHTML = 'Galat cheez! <b>[E]</b> dobara dabao to drop';
+        return;
+      }
+      this.lastRejectId = null;
+
       // Drop item anywhere
       this.player.remove(carried);
       this.scene.add(carried);
       carried.position.set(pPos.x, 0, pPos.z);
+      carried.rotation.set(0, 0, 0);
       this.items.push(carried);
       this.inventory = null;
       this.promptTip.textContent = `Dropped ${carried.userData.title}.`;
@@ -844,8 +1281,22 @@ class Game {
   animate() {
     requestAnimationFrame(this.animate);
 
-    const delta = 0.016;
+    // Real frame delta (capped) so 120Hz screens don't run the game 2x faster
+    const delta = Math.min(0.05, this.clock.getDelta());
+    this._lastDelta = delta;
     const time = performance.now() * 0.002;
+    this.updateClock(delta);
+    this.updateInventorySlot();
+
+    if (this.miniGame) {
+      const g = this.miniGame;
+      g.t += delta;
+      g.cooldown = Math.max(0, g.cooldown - delta);
+      g.needle += g.dir * g.speed * delta;
+      if (g.needle >= 1) { g.needle = 1; g.dir = -1; }
+      if (g.needle <= 0) { g.needle = 0; g.dir = 1; }
+      this.renderWireGame();
+    }
 
     // --- 1. WALKING PLAYER PHYSICS & COLLISION ---
     const landing = document.getElementById('landing-screen');
@@ -855,7 +1306,7 @@ class Game {
                               (intro && intro.style.display !== 'none') || 
                               (map && map.style.display === 'flex');
 
-      if (!this.isRiding && this.stage < 4 && !this.isFalling && !isOverlayActive) {
+      if (!this.isRiding && this.stage < 4 && !this.isFalling && !isOverlayActive && !this.miniGame) {
       let vx = 0;
       let vz = 0;
 
@@ -867,8 +1318,8 @@ class Game {
       const moveLen = Math.hypot(vx, vz);
 
       if (moveLen > 0.01) {
-        vx = (vx / moveLen) * 4.5 * delta;
-        vz = (vz / moveLen) * 4.5 * delta;
+        vx = (vx / moveLen) * this.walkSpeed * delta;
+        vz = (vz / moveLen) * this.walkSpeed * delta;
 
         let nextX = this.player.position.x + vx;
         let nextZ = this.player.position.z + vz;
@@ -919,20 +1370,11 @@ class Game {
         while (diff > Math.PI) diff -= Math.PI * 2;
         this.player.rotation.y += diff * 0.22;
 
-        // Walk cycle
-        this.player.userData.walkPhase += moveLen * 3.8;
-        const swing = Math.sin(this.player.userData.walkPhase) * 0.65;
-        this.player.userData.leftLegPivot.rotation.x = swing;
-        this.player.userData.rightLegPivot.rotation.x = -swing;
-        this.player.userData.leftArmPivot.rotation.x = -swing * 0.75;
-        this.player.userData.rightArmPivot.rotation.x = swing * 0.75;
-        this.player.userData.torsoGroup.position.y = 1.25 + Math.abs(Math.sin(this.player.userData.walkPhase * 2)) * 0.05;
+        // Natural walk cycle (steps driven by distance travelled)
+        AssetFactory.animateWalk(this.player, this.walkSpeed, delta, false);
+        if (this.player.userData.stepped) audio.playFootstep('shoe');
       } else {
-        this.player.userData.leftLegPivot.rotation.x *= 0.8;
-        this.player.userData.rightLegPivot.rotation.x *= 0.8;
-        this.player.userData.leftArmPivot.rotation.x *= 0.8;
-        this.player.userData.rightArmPivot.rotation.x *= 0.8;
-        this.player.userData.torsoGroup.position.y = THREE.MathUtils.lerp(this.player.userData.torsoGroup.position.y, 1.25, 0.1);
+        AssetFactory.animateWalk(this.player, 0, delta, false);
       }
 
       // --- TRENCH CROSSING LOGIC FOR WALKING CHACHA ---
@@ -965,7 +1407,10 @@ class Game {
       this.camera.lookAt(this.player.position.x + 1, 1.3, this.player.position.z);
 
       this.updatePrompt();
+    } else if (this.isRiding) {
+      this.markerTarget = null;
     }
+    this.updateMarker();
 
     // --- 2. COW BEHAVIOR ---
     if (this.cow.userData.isDistracted && this.cow.userData.state === 'moving') {
@@ -1067,7 +1512,16 @@ class Game {
 
         // Confetti explosion
         this.burstConfetti(this.scooter.position);
-        this.addScore(500, 1);
+        const minsLeft = this.deadline - this.gameMinutes;
+        const stars = minsLeft > 10 ? 3 : (minsLeft >= 0 ? 2 : 1);
+        this.addScore(500, stars);
+        this.levelScore += 500;
+        const setTxt = (id, t) => { const e = document.getElementById(id); if (e) e.textContent = t; };
+        const m = Math.floor(this.gameMinutes);
+        setTxt('victory-score', `+${this.levelScore}`);
+        setTxt('victory-time', `${Math.floor(m / 60)}:${(m % 60).toString().padStart(2, '0')}`);
+        setTxt('victory-stars', '⭐'.repeat(stars) + '☆'.repeat(3 - stars));
+        setTxt('victory-jugaads', `${this.roomDone.size + 3}`);
 
         this.triggerJugaadToast(' VICTORY: LEVEL 1 CLEARED! ');
         this.showDialogue(
@@ -1122,11 +1576,15 @@ class Game {
       this.camera.position.y += (Math.random() - 0.5) * 0.35;
     }
 
-    this.renderer.render(this.scene, this.camera);
+    this.gfx.render(delta);
   }
 
   updatePrompt() {
     const pPos = this.player.position;
+    const up = (v, y) => new THREE.Vector3(v.x, y, v.z);
+    this.markerTarget = null;
+    this.markerKind = 'pick';
+    const short = (t) => (t || '').replace(/\s*\(.*\)\s*/g, '').trim();
 
     if (!this.inventory) {
       let nearestItem = null;
@@ -1140,32 +1598,72 @@ class Game {
       });
 
       if (nearestItem) {
-        this.promptTip.innerHTML = ` Press <b>[E]</b> to Inspect / Pick up <b>${nearestItem.userData.title}</b>`;
+        this.markerTarget = up(nearestItem.position, nearestItem.position.y + 0.8);
+        this.markerLabel = 'Uthao: ' + short(nearestItem.userData.title);
+        this.promptTip.innerHTML = `Press <b>[E]</b> to pick up <b>${nearestItem.userData.title}</b>`;
         return;
       }
 
-      if (this.stage === 3) {
-        if (pPos.distanceTo(this.scooter.position) < 2.8) {
-          this.promptTip.innerHTML = ' Press <b>[E]</b> to Kickstart & Mount Scooter!';
+      if (this.stage === 0) {
+        const st = this.getRoomStationsInRange(pPos)[0];
+        if (st) {
+          this.markerTarget = up(st.mesh.position, st.markerY + (st.mesh.position.y || 0));
+          this.markerLabel = st.label + ' — jugaad dhoondo';
+          this.markerKind = 'locked';
+          this.promptTip.innerHTML = `<b>${st.label}</b> — iske liye kuch jugaad dhoondo!`;
           return;
         }
+        this.promptTip.innerHTML = 'Kamre me ghoomo <b>W A S D</b> | Cheezein uthao <b>[E]</b>';
+        return;
       }
 
-      this.promptTip.innerHTML = 'Explore the mohalla with <b>W, A, S, D</b> | Find the right Jugaad objects!';
-    } else {
-      if (this.stage === 0 && pPos.distanceTo(this.scooter.position) < 2.8) {
-        this.promptTip.innerHTML = ` Press <b>[E]</b> to test <b>${this.inventory.userData.title}</b> as Scooter Stand!`;
-      } else if (this.stage === 1 && pPos.distanceTo(this.trench.position) < 3.4) {
-        this.promptTip.innerHTML = ` Press <b>[E]</b> to place <b>${this.inventory.userData.title}</b> across Trench!`;
-      } else if (this.stage === 2 && pPos.distanceTo(this.cow.position) < 3.6) {
-        this.promptTip.innerHTML = ` Press <b>[E]</b> to offer <b>${this.inventory.userData.title}</b> to Gau Mata!`;
-      } else {
-        this.promptTip.innerHTML = `Carrying: <b>${this.inventory.userData.title}</b> | Press <b>[E]</b> anywhere to drop`;
+      if (this.stage >= 1 && !this.isRiding && pPos.distanceTo(this.scooter.position) < 2.8) {
+        this.markerTarget = up(this.scooter.position, 2.0);
+        this.promptTip.innerHTML = 'Press <b>[E]</b> to Kickstart & Mount Scooter!';
+        return;
       }
+
+      this.promptTip.innerHTML = 'Explore the mohalla with <b>W A S D</b> | Find the right Jugaad objects!';
+    } else {
+      const title = this.inventory.userData.title;
+      if (this.stage === 0) {
+        const inRange = this.getRoomStationsInRange(pPos);
+        const match = inRange.find(s => s.accepts === this.inventory.userData.type);
+        if (match) {
+          this.markerTarget = up(match.mesh.position, match.markerY + (match.mesh.position.y || 0));
+          this.markerLabel = `${short(title)} → ${match.label}`;
+          this.markerKind = 'use';
+          this.promptTip.innerHTML = `Press <b>[E]</b> — <b>${title}</b> ka jugaad <b>${match.label}</b> pe!`;
+          return;
+        }
+        if (inRange.length) {
+          this.markerTarget = up(inRange[0].mesh.position, inRange[0].markerY + (inRange[0].mesh.position.y || 0));
+          this.markerLabel = `${inRange[0].label}: ye cheez kaam nahi aayegi`;
+          this.markerKind = 'locked';
+        }
+        if (this.inventory.userData.type === 'brick' && pPos.distanceTo(new THREE.Vector3(-101, 0, 0.5)) < 3.5) {
+          this.markerTarget = new THREE.Vector3(-101, 2.2, 1.0);
+          this.markerLabel = 'Eent se darwaza thoko';
+          this.markerKind = 'use';
+          this.promptTip.innerHTML = 'Press <b>[E]</b> to thok the jaam darwaza with the <b>Eent</b>!';
+          return;
+        }
+      } else if (this.stage === 1 && pPos.distanceTo(this.trench.position) < 3.4) {
+        this.markerTarget = up(this.trench.position, 1.2);
+        this.promptTip.innerHTML = `Press <b>[E]</b> to place <b>${title}</b> across Trench!`;
+        return;
+      } else if (this.stage === 2 && pPos.distanceTo(this.cow.position) < 3.6) {
+        this.markerTarget = up(this.cow.position, 2.6);
+        this.promptTip.innerHTML = `Press <b>[E]</b> to offer <b>${title}</b> to Gau Mata!`;
+        return;
+      }
+      this.promptTip.innerHTML = `Carrying <b>${title}</b> | <b>[E]</b> to use / drop`;
     }
   }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  new Game();
+  setupLoadingGate(['btn-start-game', 'btn-chapter-2']);
+  const game = new Game();
+  if (import.meta.env && import.meta.env.DEV) window.__game = game; // handy for debugging in the console
 });
