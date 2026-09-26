@@ -90,6 +90,12 @@ npm run preview # opens http://localhost:4173
 
 > If the page looks old after an update, hard-refresh with **Cmd + Shift + R** (Mac) / **Ctrl + Shift + R** (Windows).
 
+### 🌐 Play Online (GitHub Pages)
+Live game: **https://karma-tic.github.io/jugaad/**
+
+Deployment is automatic: every push to `main` runs `.github/workflows/deploy.yml`, which builds the game and publishes `dist/` to GitHub Pages.
+One-time setup: repo **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+
 ### 🎬 Story Flow (2 Chapters)
 | Chapter | Page | What happens |
 | :--- | :--- | :--- |

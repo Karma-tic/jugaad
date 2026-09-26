@@ -50,7 +50,7 @@ class DesiAudioEngine {
     // 1. Play real stereophonic WAV file
     try {
       if (!this.planeAudio) {
-        this.planeAudio = new Audio('/assets/plane_whoosh.wav');
+        this.planeAudio = new Audio(import.meta.env.BASE_URL + 'assets/plane_whoosh.wav');
         this.planeAudio.preload = 'auto';
       }
       this.planeAudio.volume = 0.85;
